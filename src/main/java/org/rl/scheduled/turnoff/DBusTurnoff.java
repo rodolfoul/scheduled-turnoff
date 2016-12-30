@@ -42,6 +42,6 @@ public class DBusTurnoff implements Job {
 				conn.disconnect();
 			}
 		}
-
+		System.exit(0);
 	}
 }
