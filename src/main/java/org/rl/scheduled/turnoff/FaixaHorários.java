@@ -1,3 +1,5 @@
+package org.rl.scheduled.turnoff;
+
 import lombok.Data;
 
 @Data

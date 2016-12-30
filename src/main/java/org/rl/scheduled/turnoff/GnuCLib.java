@@ -1,3 +1,5 @@
+package org.rl.scheduled.turnoff;
+
 import com.sun.jna.Library;
 
 public interface GnuCLib extends Library {

@@ -1,3 +1,5 @@
+package org.rl.scheduled.turnoff;
+
 public class Tester {
 //		ObjectMapper mapper = new
 //	ObjectMapper();
