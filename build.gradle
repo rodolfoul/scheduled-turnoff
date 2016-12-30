@@ -22,7 +22,7 @@ dependencies {
 jar {
 	manifest {
 		attributes(
-				'Main-Class': 'MainController',
+				'Main-Class': 'org.rl.scheduled.turnoff.MainController',
 				'Class-Path': configurations.compile.collect({it.name}).join(' ')
 		)
 	}
@@ -32,8 +32,4 @@ task deploy(type: Sync, dependsOn: 'build') {
 	from jar.archivePath
 	from configurations.compile
 	into 'Z:\\Projects\\scheduled-turnoff'
-}
-
-task li << {
-	println files(configurations.compile.collect {it.name})
 }
