@@ -3,6 +3,7 @@ package org.rl.scheduled.turnoff;
 import org.freedesktop.dbus.DBusConnection;
 import org.freedesktop.dbus.exceptions.DBusException;
 import org.freedesktop.login1.Manager;
+import org.quartz.CronExpression;
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
@@ -11,12 +12,11 @@ import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.time.Duration;
+import java.text.ParseException;
 import java.time.Instant;
+import java.util.Date;
 
 public class PowerControlJob implements Job {
-
-	private final Duration POWER_OFF_DURATION = Duration.ofHours(4);
 
 	static {
 		try {
@@ -35,23 +35,25 @@ public class PowerControlJob implements Job {
 	@Override
 	public void execute(JobExecutionContext context) throws JobExecutionException {
 		try {
-			setStartUpTime();
-			powerOff();
-		} catch (DBusException | IOException e) {
+			CronExpression ligamento = new CronExpression(MainController.STARTUP_CRON);
+			Date horaLigamento = ligamento.getNextValidTimeAfter(new Date());
+
+			setNextStartUpTime(horaLigamento.toInstant());
+			powerOffNow();
+		} catch (DBusException | IOException | ParseException e) {
 			throw new JobExecutionException(e);
 		}
 	}
 
-	private void setStartUpTime() throws IOException {
+	private void setNextStartUpTime(Instant startUpTime) throws IOException {
 		try (DataOutputStream wakeAlarmStream = new DataOutputStream(
 				new FileOutputStream("/sys/class/rtc/rtc0/wakealarm"))) {
-			Instant instant = Instant.now().plus(POWER_OFF_DURATION);
-			wakeAlarmStream.writeChars(String.format("0\n%s\n", instant.getEpochSecond()));
+			wakeAlarmStream.writeChars(String.format("0\n%s\n", startUpTime.getEpochSecond()));
 		}
 
 	}
 
-	private void powerOff() throws JobExecutionException, DBusException {
+	private void powerOffNow() throws JobExecutionException, DBusException {
 		DBusConnection conn = null;
 		try {
 			conn = DBusConnection.getConnection(DBusConnection.SYSTEM);

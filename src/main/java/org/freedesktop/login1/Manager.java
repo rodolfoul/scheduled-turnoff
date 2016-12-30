@@ -5,9 +5,9 @@ import org.freedesktop.dbus.DBusInterface;
 import java.util.List;
 
 public interface Manager extends DBusInterface {
-	void PowerOff(Boolean arg);
+	void PowerOff(Boolean should);
 
-	void LockSession(String arg);
+	void LockSession(String sessionId);
 
 	List<Session> ListSessions();
 }
