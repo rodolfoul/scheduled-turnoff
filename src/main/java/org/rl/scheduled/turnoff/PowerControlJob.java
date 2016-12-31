@@ -1,5 +1,7 @@
 package org.rl.scheduled.turnoff;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.freedesktop.dbus.DBusConnection;
 import org.freedesktop.dbus.exceptions.DBusException;
 import org.freedesktop.login1.Manager;
@@ -9,6 +11,7 @@ import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -18,10 +21,13 @@ import java.util.Date;
 
 public class PowerControlJob implements Job {
 
+	private static final Logger LOGGER = LogManager.getLogger();
+
 	static {
 		try {
-			String libLookupPath = "java.library.path";
-			System.setProperty(libLookupPath, System.getProperty(libLookupPath) + ":/usr/lib/jni");
+			String libLookupPath = "java.library.path"; //dbus setup
+			File libDir = new File(File.class.getResource("/libunix-java.so").getPath()).getParentFile();
+			System.setProperty(libLookupPath, System.getProperty(libLookupPath) + ":" + libDir);
 			Field sys_paths = ClassLoader.class.getDeclaredField("sys_paths");
 			sys_paths.setAccessible(true);
 			sys_paths.set(ClassLoader.class, null);
@@ -45,7 +51,8 @@ public class PowerControlJob implements Job {
 		}
 	}
 
-	private void setNextStartUpTime(Instant startUpTime) throws IOException {
+	public void setNextStartUpTime(Instant startUpTime) throws IOException {
+		LOGGER.info("Setting next startup to {}", startUpTime);
 		try (DataOutputStream wakeAlarmStream = new DataOutputStream(
 				new FileOutputStream("/sys/class/rtc/rtc0/wakealarm"))) {
 			wakeAlarmStream.writeChars(String.format("0\n%s\n", startUpTime.getEpochSecond()));
@@ -53,19 +60,25 @@ public class PowerControlJob implements Job {
 
 	}
 
-	private void powerOffNow() throws JobExecutionException, DBusException {
+	public void powerOffNow() throws JobExecutionException, DBusException {
+		LOGGER.info("Starting shutdown sequence");
+
 		DBusConnection conn = null;
 		try {
-			conn = DBusConnection.getConnection(DBusConnection.SYSTEM);
-			Manager loginManager = conn
-					.getRemoteObject("org.freedesktop.login1", "/org/freedesktop/login1", Manager.class);
+			try {
+				conn = DBusConnection.getConnection(DBusConnection.SYSTEM);
+				Manager loginManager = conn
+						.getRemoteObject("org.freedesktop.login1", "/org/freedesktop/login1", Manager.class);
 
-			loginManager.PowerOff(true);
-		} finally {
-			if (conn != null) {
-				conn.disconnect();
+				loginManager.PowerOff(true);
+			} finally {
+				if (conn != null) {
+					conn.disconnect();
+				}
 			}
+			System.exit(0);
+		} catch (DBusException e) {
+			LOGGER.error("");
 		}
-		System.exit(0);
 	}
 }
