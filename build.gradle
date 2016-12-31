@@ -1,5 +1,4 @@
 import java.nio.file.Files
-import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 
 group 'catumbre'
@@ -34,13 +33,9 @@ jar {
 	manifest {
 		attributes(
 				'Main-Class': 'org.rl.scheduled.turnoff.MainController',
-				'Class-Path': configurations.compile.collect({ it.name }).join(' ') + ' .'
+				'Class-Path': '. ' + configurations.compile.collect({ it.name }).join(' ')
 		)
 	}
-}
-
-task t <<{
-	println configurations.compile.collect {it.name}
 }
 
 task deploy(type: Sync) {
@@ -50,38 +45,33 @@ task deploy(type: Sync) {
 	into new File('Z:\\Projects\\scheduled-turnoff').canonicalFile
 }
 
-task dbusDependency() {
-	def libDir = new File(projectDir, 'lib')
-	outputs.dir libDir
+task dbusLib {
+	def libUnixEntry = 'lib/libunix-java.so'
+	def absoluteSoFile = new File(projectDir, libUnixEntry)
+
+	outputs.file absoluteSoFile
+	outputs.dir absoluteSoFile.parent
+	build.dependsOn dbusLib
 
 	doLast {
-		def jarPath
 		new ZipInputStream(new URL('http://www.java2s.com/Code/JarDownload/dbus/dbus-java-2.7.jar.zip').newInputStream())
 				.withStream { zipIs ->
-			jarPath = new File(libDir, zipIs.getNextEntry().getName()).absoluteFile
-			jarPath.parentFile.mkdirs()
-			Files.copy(zipIs, jarPath.toPath())
-		}
-	}
-}
-compileJava.dependsOn dbusDependency
+			println 'a'
+			for (def zipEntry = zipIs.nextEntry; zipEntry != null; zipEntry = zipIs.nextEntry) {
+				if (zipEntry.name == 'dbus-java-2.7.jar') {
+					new ZipInputStream(zipIs).withStream { jarStream ->
+						for (def jarEntry = jarStream.nextEntry; jarEntry != null; jarEntry = jarStream.nextEntry) {
+							if (jarEntry.name == libUnixEntry) {
+								absoluteSoFile.parentFile.mkdirs()
+								Files.copy(jarStream, absoluteSoFile.toPath())
+								return
+							}
+						}
+					}
 
-task dbusLibExtract() {
-	def soName = "libunix-java.so"
-	def soLib = new File("$projectDir/lib/$soName")
-	def dbusJar = new File("$projectDir/lib/dbus-java-2.7.jar")
-
-	dependsOn dbusDependency
-	outputs.file soLib
-	inputs.file dbusJar
-
-	doLast {
-		def jarFile = new ZipFile(dbusJar)
-		jarFile.getInputStream(jarFile.getEntry("lib/$soName")).withStream { zipIs ->
-			soLib.withOutputStream {
-				it << zipIs
+					return
+				}
 			}
 		}
 	}
 }
-build.dependsOn dbusLibExtract

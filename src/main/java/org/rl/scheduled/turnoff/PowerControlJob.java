@@ -42,9 +42,9 @@ public class PowerControlJob implements Job {
 	public void execute(JobExecutionContext context) throws JobExecutionException {
 		try {
 			CronExpression ligamento = new CronExpression(MainController.STARTUP_CRON);
-			Date horaLigamento = ligamento.getNextValidTimeAfter(new Date());
+			Instant horaLigamento = ligamento.getNextValidTimeAfter(new Date()).toInstant();
 
-			setNextStartUpTime(horaLigamento.toInstant());
+			setNextStartUpTime(horaLigamento);
 			powerOffNow();
 		} catch (DBusException | IOException | ParseException e) {
 			throw new JobExecutionException(e);
