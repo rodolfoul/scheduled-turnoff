@@ -56,7 +56,6 @@ task dbusLib {
 	doLast {
 		new ZipInputStream(new URL('http://www.java2s.com/Code/JarDownload/dbus/dbus-java-2.7.jar.zip').newInputStream())
 				.withStream { zipIs ->
-			println 'a'
 			for (def zipEntry = zipIs.nextEntry; zipEntry != null; zipEntry = zipIs.nextEntry) {
 				if (zipEntry.name == 'dbus-java-2.7.jar') {
 					new ZipInputStream(zipIs).withStream { jarStream ->

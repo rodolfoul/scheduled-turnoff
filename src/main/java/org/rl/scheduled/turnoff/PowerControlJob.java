@@ -10,11 +10,12 @@ import org.quartz.Job;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 
-import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.Writer;
 import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.text.ParseException;
 import java.time.Instant;
 import java.util.Date;
@@ -33,7 +34,7 @@ public class PowerControlJob implements Job {
 			sys_paths.set(ClassLoader.class, null);
 
 		} catch (IllegalAccessException | NoSuchFieldException e) {
-			e.printStackTrace();
+			LOGGER.error("Exception while setting up dbus library path.", e);
 			System.exit(1);
 		}
 	}
@@ -46,39 +47,38 @@ public class PowerControlJob implements Job {
 
 			setNextStartUpTime(horaLigamento);
 			powerOffNow();
+
 		} catch (DBusException | IOException | ParseException e) {
+			LOGGER.error("Exception while during power control", e);
 			throw new JobExecutionException(e);
 		}
 	}
 
-	public void setNextStartUpTime(Instant startUpTime) throws IOException {
-		LOGGER.info("Setting next startup to {}", startUpTime);
-		try (DataOutputStream wakeAlarmStream = new DataOutputStream(
-				new FileOutputStream("/sys/class/rtc/rtc0/wakealarm"))) {
-			wakeAlarmStream.writeChars(String.format("0\n%s\n", startUpTime.getEpochSecond()));
+	private void setNextStartUpTime(Instant startUpTime) throws IOException {
+		LOGGER.info("Setting next startup to {} -> {}", startUpTime, startUpTime.getEpochSecond());
+		try (Writer wakeAlarmStream = Files.newBufferedWriter(Paths.get("/sys/class/rtc/rtc0/wakealarm"))) {
+			wakeAlarmStream.write(String.format("0\n"));
 		}
-
+		try (Writer wakeAlarmStream = Files.newBufferedWriter(Paths.get("/sys/class/rtc/rtc0/wakealarm"))) {
+			wakeAlarmStream.write(String.format("%s\n", startUpTime.getEpochSecond()));
+		}
 	}
 
-	public void powerOffNow() throws JobExecutionException, DBusException {
+	private void powerOffNow() throws DBusException {
 		LOGGER.info("Starting shutdown sequence");
 
 		DBusConnection conn = null;
 		try {
-			try {
-				conn = DBusConnection.getConnection(DBusConnection.SYSTEM);
-				Manager loginManager = conn
-						.getRemoteObject("org.freedesktop.login1", "/org/freedesktop/login1", Manager.class);
+			conn = DBusConnection.getConnection(DBusConnection.SYSTEM);
+			Manager loginManager = conn
+					.getRemoteObject("org.freedesktop.login1", "/org/freedesktop/login1", Manager.class);
 
-				loginManager.PowerOff(true);
-			} finally {
-				if (conn != null) {
-					conn.disconnect();
-				}
+			loginManager.PowerOff(true);
+		} finally {
+			if (conn != null) {
+				conn.disconnect();
 			}
-			System.exit(0);
-		} catch (DBusException e) {
-			LOGGER.error("");
 		}
+		System.exit(0);
 	}
 }

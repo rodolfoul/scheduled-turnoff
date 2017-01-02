@@ -84,7 +84,7 @@ public class MainController {
 					System.err.println("Error, process exited with status code " + status);
 				}
 			} catch (InterruptedException e) {
-				e.printStackTrace(); //Unreacheable code, since no threads interrupt the current one.
+				LOGGER.error("Unreacheable code, since no threads interrupt the current one.", e);
 			}
 			System.exit(status);
 		}
