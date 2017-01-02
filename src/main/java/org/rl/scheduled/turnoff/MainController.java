@@ -1,5 +1,6 @@
 package org.rl.scheduled.turnoff;
 
+import com.sun.jna.LastErrorException;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
 import org.apache.logging.log4j.LogManager;
@@ -14,6 +15,7 @@ import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
 import org.quartz.impl.StdSchedulerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -23,11 +25,24 @@ import java.util.List;
 import java.util.ListIterator;
 
 public class MainController {
+	interface CLibrary extends Library {
+		CLibrary INSTANCE = (CLibrary) Native.loadLibrary("c", CLibrary.class);
+
+		int getpid();
+
+		void chdir(String path) throws LastErrorException;
+	}
+
+	static {
+		File file = new File(MainController.class.getProtectionDomain().getCodeSource().getLocation().getPath());
+		CLibrary.INSTANCE.chdir(file.toString());
+		System.setProperty("user.dir", file.toString());
+	}
+
 	public static final String SHUTDOWN_CRON = "0 30 1 ? * *";
 	public static final String STARTUP_CRON = "0 0 6 ? * *";
 
 	private static final Logger LOGGER = LogManager.getLogger();
-
 
 	public static void main(String[] args) throws IOException, SchedulerException, DBusException {
 		checkRootPermission();
@@ -39,11 +54,6 @@ public class MainController {
 		Scheduler scheduler = new StdSchedulerFactory().getScheduler();
 		scheduler.start();
 		scheduler.scheduleJob(job, trigger);
-	}
-
-	interface CLibrary extends Library {
-		CLibrary INSTANCE = (CLibrary) Native.loadLibrary("c", CLibrary.class);
-		int getpid();
 	}
 
 	private static void checkRootPermission() throws IOException {
