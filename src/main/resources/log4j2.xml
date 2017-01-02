@@ -4,7 +4,7 @@
 		<Console name="Console" target="SYSTEM_OUT">
 			<PatternLayout pattern="%highlight{%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%t] %logger} - %msg%n"/>
 		</Console>
-		<RollingFile name="FileLogging" fileName="log" filePattern="log.%i.gz">
+		<RollingFile name="FileLogging" fileName="/var/log/scheduled-turnoff.log" filePattern="/var/log/scheduled-turnoff.%i.log.gz">
 			<PatternLayout>
 				<Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%t] %logger - %msg%n</Pattern>
 			</PatternLayout>
@@ -12,7 +12,7 @@
 				<OnStartupTriggeringPolicy/>
 				<SizeBasedTriggeringPolicy size="1 MB"/>
 			</Policies>
-			<DefaultRolloverStrategy max="1" compressionLevel="9" />
+			<DefaultRolloverStrategy max="9" compressionLevel="9"/>
 		</RollingFile>
 	</Appenders>
 	<Loggers>
