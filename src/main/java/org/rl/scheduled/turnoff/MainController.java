@@ -6,8 +6,6 @@ import com.sun.jna.Native;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.quartz.CronExpression;
-import org.quartz.CronTrigger;
-import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 
 import java.io.BufferedInputStream;
@@ -33,9 +31,6 @@ import java.util.ListIterator;
 import java.util.Properties;
 
 public class MainController {
-	private CronTrigger trigger;
-	private Scheduler scheduler;
-
 	interface CLibrary extends Library {
 		CLibrary INSTANCE = (CLibrary) Native.loadLibrary("c", CLibrary.class);
 
@@ -50,14 +45,18 @@ public class MainController {
 		System.setProperty("user.dir", jarPath.toString());
 	}
 
+	/**
+	 * LOGGER should come always after static block, as it sets the correct current directory for logger configuration.
+	 */
 	private static final Logger LOGGER = LogManager.getLogger();
-
-	private Properties properties;
 
 	public static void main(String[] args) {
 		new MainController().start();
 	}
 
+	private Properties properties;
+	private CronExpression currentShutdownCron;
+	private CronExpression currentStartupCron;
 
 	public void start() {
 		checkRootPermission();
@@ -117,7 +116,13 @@ public class MainController {
 
 	private void schedulePowerOff() {
 		try {
-			QuartzController.reschedulePowerOffJob(new CronExpression(properties.getProperty("shutdown.cron")));
+			CronExpression cronExpression = new CronExpression(properties.getProperty("shutdown.cron"));
+			if (currentShutdownCron != null &&
+			    cronExpression.getExpressionSummary().equals(currentShutdownCron.getExpressionSummary())) {
+				return;
+			}
+			currentShutdownCron = cronExpression;
+			QuartzController.reschedulePowerOffJob(cronExpression);
 
 		} catch (ParseException e) {
 			LOGGER.warn("Could not parse the given cron expression for shutdown.", e);
@@ -128,8 +133,14 @@ public class MainController {
 
 	private void schedulePowerOn() {
 		try {
-			CronExpression turnOnExpression = new CronExpression(properties.getProperty("startup.cron"));
-			Instant turnOnInstant = turnOnExpression.getNextValidTimeAfter(new Date()).toInstant();
+			CronExpression startupExpression = new CronExpression(properties.getProperty("startup.cron"));
+
+			if (currentStartupCron != null &&
+			    startupExpression.getExpressionSummary().equals(currentStartupCron.getExpressionSummary())) {
+				return;
+			}
+			currentStartupCron = startupExpression;
+			Instant turnOnInstant = startupExpression.getNextValidTimeAfter(new Date()).toInstant();
 
 			long turnOnEpoch = turnOnInstant.getEpochSecond();
 			LOGGER.info("Setting next startup to {} -> {} -> {}", turnOnInstant, turnOnEpoch,
@@ -195,7 +206,7 @@ public class MainController {
 				cpArgument = true;
 
 			} else if (it.previousIndex() == 0) {
-				cmdLine.append(" ").append(argument);
+				cmdLine.append(argument);
 
 			} else if ("-jar".equals(argument)) {
 				cmdLine.append(" ").append(argument).append(" ").append(it.next());
