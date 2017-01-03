@@ -118,7 +118,7 @@ public class MainController {
 
 	private void schedulePowerOff() {
 		try {
-			QuartzController.rescheduleJob(new CronExpression(properties.getProperty("shutdown.cron")));
+			QuartzController.reschedulePowerOffJob(new CronExpression(properties.getProperty("shutdown.cron")));
 
 		} catch (ParseException e) {
 			LOGGER.warn("Could not parse the given cron expression for shutdown.", e);

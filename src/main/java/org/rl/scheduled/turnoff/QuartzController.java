@@ -41,7 +41,7 @@ public class QuartzController {
 	}
 
 
-	public static void rescheduleJob(CronExpression cronExpression) throws SchedulerException {
+	public static void reschedulePowerOffJob(CronExpression cronExpression) throws SchedulerException {
 		LOGGER.info("Next shutdown to occur at {}",
 		            cronExpression.getNextValidTimeAfter(new Date()).toInstant().atZone(
 				            ZoneId.systemDefault()));
@@ -93,7 +93,7 @@ public class QuartzController {
 				Manager loginManager = conn
 						.getRemoteObject("org.freedesktop.login1", "/org/freedesktop/login1", Manager.class);
 
-				loginManager.PowerOff(true);
+				loginManager.PowerOff(false);
 
 			} finally {
 				if (conn != null) {
