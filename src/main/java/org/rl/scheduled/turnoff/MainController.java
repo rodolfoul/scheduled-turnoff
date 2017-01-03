@@ -70,7 +70,7 @@ public class MainController {
 	private void configureProperties() {
 
 		properties = new Properties();
-		Path propertiesPath = Paths.get(MainController.class.getResource("/cron-times.properties").getFile());
+		final Path propertiesPath = Paths.get(MainController.class.getResource("/cron-times.properties").getFile());
 		loadProperties(propertiesPath);
 
 		new Thread(() -> {
@@ -94,9 +94,8 @@ public class MainController {
 				}
 
 			} catch (IOException e) {
-				LOGGER.error(
-						"Exception while configuring watch service for properties file. " +
-						"Properties reloading will not function", e);
+				LOGGER.error("Exception while configuring watch service for properties file. " +
+				             "Properties reloading will not function", e);
 			}
 		}).start();
 	}
