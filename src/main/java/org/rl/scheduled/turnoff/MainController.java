@@ -8,7 +8,6 @@ import org.apache.logging.log4j.Logger;
 import org.quartz.CronExpression;
 import org.quartz.SchedulerException;
 
-import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Writer;
@@ -54,9 +53,18 @@ public class MainController {
 		new MainController().start();
 	}
 
-	private Properties properties;
+	private final Properties properties = new Properties();
 	private CronExpression currentShutdownCron;
 	private CronExpression currentStartupCron;
+
+	public MainController() {
+		try {
+			currentStartupCron = new CronExpression("0 0 6 ? * *");
+			currentShutdownCron = new CronExpression("0 30 1 ? * *");
+		} catch (ParseException e) {
+			LOGGER.error("Wrong cron expression", e);
+		}
+	}
 
 	public void start() {
 		checkRootPermission();
@@ -67,15 +75,19 @@ public class MainController {
 	}
 
 	private void configureProperties() {
+		String propertiesFileName = "src/dist/config/cron-times.properties";
+		final Path propertiesPath = Paths.get(MainController.class.getResource("/").getFile())
+		                                 .resolve(propertiesFileName);
 
-		properties = new Properties();
-		final Path propertiesPath = Paths.get(MainController.class.getResource("/cron-times.properties").getFile());
-		loadProperties(propertiesPath);
+		if (Files.exists(propertiesPath)) {
+			loadProperties(propertiesPath);
+		}
 
 		new Thread(() -> {
 			Path watchedDir = propertiesPath.getParent();
 			try (WatchService watchService = FileSystems.getDefault().newWatchService()) {
-				WatchKey registerKey = watchedDir.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY);
+				WatchKey registerKey = watchedDir.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY,
+				                                           StandardWatchEventKinds.ENTRY_CREATE);
 				while (true) {
 					try {
 						WatchKey eventKey = watchService.take();
@@ -94,13 +106,13 @@ public class MainController {
 
 			} catch (IOException e) {
 				LOGGER.error("Exception while configuring watch service for properties file. " +
-				             "Properties reloading will not function", e);
+						             "Properties reloading will not function", e);
 			}
 		}).start();
 	}
 
 	private void loadProperties(Path propertiesPath) {
-		try (InputStream is = new BufferedInputStream(Files.newInputStream(propertiesPath))) {
+		try (InputStream is = Files.newInputStream(propertiesPath)) {
 			properties.load(is);
 
 		} catch (IOException e) {
@@ -117,12 +129,12 @@ public class MainController {
 	private void schedulePowerOff() {
 		try {
 			CronExpression cronExpression = new CronExpression(properties.getProperty("shutdown.cron"));
-			if (currentShutdownCron != null &&
-			    cronExpression.getExpressionSummary().equals(currentShutdownCron.getExpressionSummary())) {
+			if (currentShutdownCron.getExpressionSummary().equals(cronExpression.getExpressionSummary())) {
 				return;
 			}
-			currentShutdownCron = cronExpression;
+
 			QuartzController.reschedulePowerOffJob(cronExpression);
+			currentShutdownCron = cronExpression;
 
 		} catch (ParseException e) {
 			LOGGER.warn("Could not parse the given cron expression for shutdown.", e);
@@ -135,11 +147,9 @@ public class MainController {
 		try {
 			CronExpression startupExpression = new CronExpression(properties.getProperty("startup.cron"));
 
-			if (currentStartupCron != null &&
-			    startupExpression.getExpressionSummary().equals(currentStartupCron.getExpressionSummary())) {
+			if (currentStartupCron.getExpressionSummary().equals(startupExpression.getExpressionSummary())) {
 				return;
 			}
-			currentStartupCron = startupExpression;
 			Instant turnOnInstant = startupExpression.getNextValidTimeAfter(new Date()).toInstant();
 
 			long turnOnEpoch = turnOnInstant.getEpochSecond();
@@ -152,6 +162,7 @@ public class MainController {
 			try (Writer wakeAlarmStream = Files.newBufferedWriter(Paths.get("/sys/class/rtc/rtc0/wakealarm"))) {
 				wakeAlarmStream.write(turnOnEpoch + "\n");
 			}
+			currentStartupCron = startupExpression;
 
 		} catch (ParseException e) {
 			LOGGER.warn("Could not parse cron expression for startup.cron", e);
