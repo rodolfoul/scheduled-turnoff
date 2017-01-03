@@ -5,7 +5,7 @@ import com.sun.jna.Library;
 import com.sun.jna.Native;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.freedesktop.dbus.exceptions.DBusException;
+import org.quartz.CronExpression;
 import org.quartz.CronScheduleBuilder;
 import org.quartz.JobBuilder;
 import org.quartz.JobDetail;
@@ -17,10 +17,14 @@ import org.quartz.impl.StdSchedulerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.text.ParseException;
+import java.time.Instant;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.ListIterator;
 
@@ -35,7 +39,7 @@ public class MainController {
 
 	static {
 		File file = new File(MainController.class.getProtectionDomain().getCodeSource().getLocation().getPath());
-		CLibrary.INSTANCE.chdir(file.toString());
+		CLibrary.INSTANCE.chdir(file.getParentFile().toString());
 		System.setProperty("user.dir", file.toString());
 	}
 
@@ -44,7 +48,7 @@ public class MainController {
 
 	private static final Logger LOGGER = LogManager.getLogger();
 
-	public static void main(String[] args) throws IOException, SchedulerException, DBusException {
+	public static void main(String[] args) throws IOException, SchedulerException {
 		checkRootPermission();
 
 		JobDetail job = JobBuilder.newJob(PowerControlJob.class).build();
@@ -54,7 +58,28 @@ public class MainController {
 		Scheduler scheduler = new StdSchedulerFactory().getScheduler();
 		scheduler.start();
 		scheduler.scheduleJob(job, trigger);
+
+		schedulePowerOn();
 	}
+
+	private static void schedulePowerOn() throws IOException {
+		try {
+			CronExpression turnOnExpression = new CronExpression(MainController.STARTUP_CRON);
+			Instant turnOnInstant = turnOnExpression.getNextValidTimeAfter(new Date()).toInstant();
+
+			LOGGER.info("Setting next startup to {} -> {}", turnOnInstant, turnOnInstant.getEpochSecond());
+			try (Writer wakeAlarmStream = Files.newBufferedWriter(Paths.get("/sys/class/rtc/rtc0/wakealarm"))) {
+				wakeAlarmStream.write(String.format("0\n"));
+			}
+			try (Writer wakeAlarmStream = Files.newBufferedWriter(Paths.get("/sys/class/rtc/rtc0/wakealarm"))) {
+				wakeAlarmStream.write(String.format("%s\n", turnOnInstant.getEpochSecond()));
+			}
+
+		} catch (ParseException e) {
+			LOGGER.error("Unreachable code, as ");
+		}
+	}
+
 
 	private static void checkRootPermission() throws IOException {
 		String userName = System.getProperty("user.name");

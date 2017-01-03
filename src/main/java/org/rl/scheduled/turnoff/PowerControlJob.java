@@ -5,20 +5,12 @@ import org.apache.logging.log4j.Logger;
 import org.freedesktop.dbus.DBusConnection;
 import org.freedesktop.dbus.exceptions.DBusException;
 import org.freedesktop.login1.Manager;
-import org.quartz.CronExpression;
 import org.quartz.Job;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.Writer;
 import java.lang.reflect.Field;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.text.ParseException;
-import java.time.Instant;
-import java.util.Date;
 
 public class PowerControlJob implements Job {
 
@@ -42,25 +34,10 @@ public class PowerControlJob implements Job {
 	@Override
 	public void execute(JobExecutionContext context) throws JobExecutionException {
 		try {
-			CronExpression ligamento = new CronExpression(MainController.STARTUP_CRON);
-			Instant horaLigamento = ligamento.getNextValidTimeAfter(new Date()).toInstant();
-
-			setNextStartUpTime(horaLigamento);
 			powerOffNow();
-
-		} catch (DBusException | IOException | ParseException e) {
+		} catch (DBusException e) {
 			LOGGER.error("Exception while during power control", e);
 			throw new JobExecutionException(e);
-		}
-	}
-
-	private void setNextStartUpTime(Instant startUpTime) throws IOException {
-		LOGGER.info("Setting next startup to {} -> {}", startUpTime, startUpTime.getEpochSecond());
-		try (Writer wakeAlarmStream = Files.newBufferedWriter(Paths.get("/sys/class/rtc/rtc0/wakealarm"))) {
-			wakeAlarmStream.write(String.format("0\n"));
-		}
-		try (Writer wakeAlarmStream = Files.newBufferedWriter(Paths.get("/sys/class/rtc/rtc0/wakealarm"))) {
-			wakeAlarmStream.write(String.format("%s\n", startUpTime.getEpochSecond()));
 		}
 	}
 

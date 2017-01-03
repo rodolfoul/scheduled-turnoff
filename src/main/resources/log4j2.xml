@@ -20,5 +20,10 @@
 			<AppenderRef ref="FileLogging"/>
 			<AppenderRef ref="Console"/>
 		</Root>
+
+		<Logger name="org.quartz" level="INFO" additivity="false">
+			<AppenderRef ref="Console"/>
+			<AppenderRef ref="FileLogging"/>
+		</Logger>
 	</Loggers>
 </Configuration>
