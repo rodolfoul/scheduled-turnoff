@@ -2,7 +2,7 @@
 <Configuration status="WARN">
 	<Appenders>
 		<Console name="Console" target="SYSTEM_OUT">
-			<PatternLayout pattern="%highlight{%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%t] %logger} - %msg%n"/>
+			<PatternLayout pattern="%highlight{%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%t] %39.39logger} - %msg%n"/>
 		</Console>
 		<RollingFile name="FileLogging" fileName="scheduled-turnoff.log" filePattern="scheduled-turnoff.%i.log.gz">
 			<PatternLayout>

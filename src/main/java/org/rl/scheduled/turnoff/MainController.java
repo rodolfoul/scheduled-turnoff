@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.ParseException;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -48,11 +49,14 @@ public class MainController {
 
 	private static final Logger LOGGER = LogManager.getLogger();
 
-	public static void main(String[] args) throws IOException, SchedulerException {
+	public static void main(String[] args) throws IOException, SchedulerException, ParseException {
 		checkRootPermission();
 
 		JobDetail job = JobBuilder.newJob(PowerControlJob.class).build();
-		Trigger trigger = TriggerBuilder.newTrigger().withSchedule(CronScheduleBuilder.cronSchedule(SHUTDOWN_CRON))
+		CronExpression shutdownCron = new CronExpression(SHUTDOWN_CRON);
+		LOGGER.info("Next shutdown to occur at {}", shutdownCron.getNextValidTimeAfter(new Date()).toInstant().atZone(
+				ZoneId.systemDefault()));
+		Trigger trigger = TriggerBuilder.newTrigger().withSchedule(CronScheduleBuilder.cronSchedule(shutdownCron))
 		                                .build();
 
 		Scheduler scheduler = new StdSchedulerFactory().getScheduler();
@@ -67,12 +71,14 @@ public class MainController {
 			CronExpression turnOnExpression = new CronExpression(MainController.STARTUP_CRON);
 			Instant turnOnInstant = turnOnExpression.getNextValidTimeAfter(new Date()).toInstant();
 
-			LOGGER.info("Setting next startup to {} -> {}", turnOnInstant, turnOnInstant.getEpochSecond());
+			long turnOnEpoch = turnOnInstant.getEpochSecond();
+			LOGGER.info("Setting next startup to {} -> {} -> {}", turnOnInstant, turnOnEpoch,
+			            turnOnInstant.atZone(ZoneId.systemDefault()));
 			try (Writer wakeAlarmStream = Files.newBufferedWriter(Paths.get("/sys/class/rtc/rtc0/wakealarm"))) {
 				wakeAlarmStream.write(String.format("0\n"));
 			}
 			try (Writer wakeAlarmStream = Files.newBufferedWriter(Paths.get("/sys/class/rtc/rtc0/wakealarm"))) {
-				wakeAlarmStream.write(String.format("%s\n", turnOnInstant.getEpochSecond()));
+				wakeAlarmStream.write(String.format("%s\n", turnOnEpoch));
 			}
 
 		} catch (ParseException e) {
