@@ -137,16 +137,16 @@ public class MainController {
 			            turnOnInstant.atZone(ZoneId.systemDefault()));
 
 			try (Writer wakeAlarmStream = Files.newBufferedWriter(Paths.get("/sys/class/rtc/rtc0/wakealarm"))) {
-				wakeAlarmStream.write(String.format("0\n"));
+				wakeAlarmStream.write("0\n");
 			}
 			try (Writer wakeAlarmStream = Files.newBufferedWriter(Paths.get("/sys/class/rtc/rtc0/wakealarm"))) {
-				wakeAlarmStream.write(String.format("%s\n", turnOnEpoch));
+				wakeAlarmStream.write(turnOnEpoch + "\n");
 			}
 
 		} catch (ParseException e) {
 			LOGGER.warn("Could not parse cron expression for startup.cron", e);
 		} catch (IOException e) {
-			LOGGER.error("Failed while configuring next startup time.");
+			LOGGER.error("Failed while configuring next startup time.", e);
 		}
 	}
 

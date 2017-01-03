@@ -101,7 +101,7 @@ public class QuartzController {
 				}
 			}
 
-			LOGGER.debug("Power off signal successful exiting.");
+			LOGGER.debug("Power off signal successful, exiting.");
 			System.exit(0);
 		}
 	}
