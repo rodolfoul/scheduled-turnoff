@@ -38,13 +38,20 @@ jar {
 	}
 }
 
-task deploy(type: Sync) {
+task deploy {
 	dependsOn build
-	from jar.archivePath
-	from configurations.compile
-	from configurations.runtime
-	from 'src/dist/config'
-	into new File('Z:\\Projects\\scheduled-turnoff').canonicalFile
+
+	doLast {
+		//Using ant over gradle Sync task, as it is lot quicker
+		ant.sync(toDir: 'Z:\\Projects\\scheduled-turnoff') {
+			ant.file(file: jar.archivePath)
+			ant.fileset(dir: 'src/dist/config')
+
+			(configurations.runtime + configurations.compile).each {
+				ant.file(file: it)
+			}
+		}
+	}
 }
 
 task dbusLib {

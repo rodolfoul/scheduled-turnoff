@@ -1,6 +1,5 @@
 package org.rl.scheduled.turnoff;
 
-import com.sun.jna.LastErrorException;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
 import org.apache.logging.log4j.LogManager;
@@ -34,14 +33,10 @@ public class MainController {
 		CLibrary INSTANCE = (CLibrary) Native.loadLibrary("c", CLibrary.class);
 
 		int getpid();
-
-		void chdir(String path) throws LastErrorException;
 	}
 
 	static {
-		Path jarPath = Paths.get(MainController.class.getResource("/").getPath());
-		CLibrary.INSTANCE.chdir(jarPath.getParent().toString());
-		System.setProperty("user.dir", jarPath.toString());
+		System.setProperty("logDirectory", System.class.getResource("/").getPath());
 	}
 
 	/**
@@ -57,15 +52,6 @@ public class MainController {
 	private CronExpression currentShutdownCron;
 	private CronExpression currentStartupCron;
 
-	public MainController() {
-		try {
-			currentStartupCron = new CronExpression("0 0 6 ? * *");
-			currentShutdownCron = new CronExpression("0 30 1 ? * *");
-		} catch (ParseException e) {
-			LOGGER.error("Wrong cron expression", e);
-		}
-	}
-
 	public void start() {
 		checkRootPermission();
 
@@ -75,7 +61,7 @@ public class MainController {
 	}
 
 	private void configureProperties() {
-		String propertiesFileName = "src/dist/config/cron-times.properties";
+		String propertiesFileName = "cron-times.properties";
 		final Path propertiesPath = Paths.get(MainController.class.getResource("/").getFile())
 		                                 .resolve(propertiesFileName);
 
@@ -128,8 +114,9 @@ public class MainController {
 
 	private void schedulePowerOff() {
 		try {
-			CronExpression cronExpression = new CronExpression(properties.getProperty("shutdown.cron"));
-			if (currentShutdownCron.getExpressionSummary().equals(cronExpression.getExpressionSummary())) {
+			CronExpression cronExpression = new CronExpression(properties.getProperty("shutdown.cron", "0 30 1 ? * *"));
+			if (currentShutdownCron != null && currentShutdownCron.getExpressionSummary()
+			                                                      .equals(cronExpression.getExpressionSummary())) {
 				return;
 			}
 
@@ -145,9 +132,11 @@ public class MainController {
 
 	private void schedulePowerOn() {
 		try {
-			CronExpression startupExpression = new CronExpression(properties.getProperty("startup.cron"));
+			CronExpression startupExpression = new CronExpression(
+					properties.getProperty("startup.cron", "0 0 6 ? * *"));
 
-			if (currentStartupCron.getExpressionSummary().equals(startupExpression.getExpressionSummary())) {
+			if (currentStartupCron != null && currentStartupCron.getExpressionSummary()
+			                                                    .equals(startupExpression.getExpressionSummary())) {
 				return;
 			}
 			Instant turnOnInstant = startupExpression.getNextValidTimeAfter(new Date()).toInstant();
