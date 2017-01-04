@@ -114,7 +114,8 @@ public class MainController {
 
 	private void schedulePowerOff() {
 		try {
-			CronExpression cronExpression = new CronExpression(properties.getProperty("shutdown.cron", "0 30 1 ? * *"));
+			CronExpression cronExpression = parseMultiCronExpression(
+					properties.getProperty("shutdown.cron", "0 30 1 ? * *"));
 			if (currentShutdownCron != null && currentShutdownCron.getExpressionSummary()
 			                                                      .equals(cronExpression.getExpressionSummary())) {
 				return;
@@ -132,7 +133,7 @@ public class MainController {
 
 	private void schedulePowerOn() {
 		try {
-			CronExpression startupExpression = new CronExpression(
+			CronExpression startupExpression = parseMultiCronExpression(
 					properties.getProperty("startup.cron", "0 0 6 ? * *"));
 
 			if (currentStartupCron != null && currentStartupCron.getExpressionSummary()
@@ -216,5 +217,32 @@ public class MainController {
 			cmdLine.append(System.getProperty("sun.java.command"));
 		}
 		return cmdLine.toString();
+	}
+
+	private static CronExpression parseMultiCronExpression(String multiExpressionCron) throws ParseException {
+		String[] splitExpression = multiExpressionCron.split("\\|");
+		if (splitExpression.length == 1) {
+			return new CronExpression(splitExpression[0]);
+		}
+		Date currentTime = new Date();
+		CronExpression mostRecentCron = null;
+		Instant mostRecentInstant = null;
+
+		for (String s : splitExpression) {
+			CronExpression cronExpression = new CronExpression(s);
+			if (mostRecentCron == null) {
+				mostRecentCron = cronExpression;
+				mostRecentInstant = mostRecentCron.getNextValidTimeAfter(currentTime).toInstant();
+				continue;
+			}
+
+			Instant instant = cronExpression.getNextValidTimeAfter(currentTime).toInstant();
+			if (mostRecentInstant.isAfter(instant)) {
+				mostRecentCron = cronExpression;
+				mostRecentInstant = instant;
+			}
+
+		}
+		return mostRecentCron;
 	}
 }
