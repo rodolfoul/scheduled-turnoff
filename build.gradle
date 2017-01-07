@@ -1,6 +1,3 @@
-import java.nio.file.Files
-import java.util.zip.ZipInputStream
-
 group 'catumbre'
 version '1.0-SNAPSHOT'
 
@@ -17,7 +14,6 @@ repositories {
 dependencies {
 	compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.16.12'
 
-	compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.8.5'
 	compile group: 'org.quartz-scheduler', name: 'quartz', version: '2.2.3'
 	compile group: 'net.java.dev.jna', name: 'jna', version: '4.2.2'
 	compile group: 'com.github.bdeneuter', name: 'dbus-java', version: '2.7'
@@ -38,8 +34,25 @@ jar {
 	}
 }
 
+task libunixGet {
+	def soFile = 'libunix-java.so'
+	def libDir = new File(projectDir, 'lib')
+	def absoluteSoFile = new File(libDir, soFile)
+
+	outputs.dir libDir
+	outputs.file absoluteSoFile
+
+	doLast {
+		libDir.mkdirs()
+		ant.get(src: 'http://central.maven.org/maven2/org/abstractj/libmatthew/libunix/0.5.1/libunix-0.5.1.so',
+				dest: absoluteSoFile,
+				verbose: true)
+	}
+}
+
 task deploy {
 	dependsOn build
+	dependsOn libunixGet
 
 	doLast {
 		//Using ant over gradle Sync task, as it is lot quicker
@@ -49,36 +62,6 @@ task deploy {
 
 			(configurations.runtime + configurations.compile).each {
 				ant.file(file: it)
-			}
-		}
-	}
-}
-
-task dbusLib {
-	def libUnixEntry = 'lib/libunix-java.so'
-	def absoluteSoFile = new File(projectDir, libUnixEntry)
-
-	outputs.file absoluteSoFile
-	outputs.dir absoluteSoFile.parent
-	build.dependsOn dbusLib
-
-	doLast {
-		new ZipInputStream(new URL('http://www.java2s.com/Code/JarDownload/dbus/dbus-java-2.7.jar.zip').newInputStream())
-				.withStream { zipIs ->
-			for (def zipEntry = zipIs.nextEntry; zipEntry != null; zipEntry = zipIs.nextEntry) {
-				if (zipEntry.name == 'dbus-java-2.7.jar') {
-					new ZipInputStream(zipIs).withStream { jarStream ->
-						for (def jarEntry = jarStream.nextEntry; jarEntry != null; jarEntry = jarStream.nextEntry) {
-							if (jarEntry.name == libUnixEntry) {
-								absoluteSoFile.parentFile.mkdirs()
-								Files.copy(jarStream, absoluteSoFile.toPath())
-								return
-							}
-						}
-					}
-
-					return
-				}
 			}
 		}
 	}

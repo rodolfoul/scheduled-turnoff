@@ -58,7 +58,7 @@ public class QuartzController {
 		currentTrigger = trigger;
 	}
 
-	private static class PowerOffJob implements Job {
+	public static class PowerOffJob implements Job {
 
 		static {
 			try {
