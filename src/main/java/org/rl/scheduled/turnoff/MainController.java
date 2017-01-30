@@ -6,6 +6,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.quartz.CronExpression;
 import org.quartz.SchedulerException;
+import sun.misc.Signal;
+import sun.misc.SignalHandler;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,6 +47,14 @@ public class MainController {
 	private static final Logger LOGGER = LogManager.getLogger();
 
 	public static void main(String[] args) {
+		SignalHandler gracefulExitHandler = (sig) -> {
+			LOGGER.info("Exiting.");
+			System.exit(0);
+		};
+
+		Signal.handle(new Signal("INT"), gracefulExitHandler);
+		Signal.handle(new Signal("TERM"), gracefulExitHandler);
+
 		new MainController().start();
 	}
 
