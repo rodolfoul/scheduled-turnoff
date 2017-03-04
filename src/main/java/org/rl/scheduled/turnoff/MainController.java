@@ -49,12 +49,13 @@ public class MainController {
 	public static void main(String[] args) {
 		SignalHandler gracefulExitHandler = (sig) -> {
 			LOGGER.info("Exiting.");
-			System.exit(0);
+			System.exit(0); //Sets correct exit code and exits the jvm.
 		};
 
 		Signal.handle(new Signal("INT"), gracefulExitHandler);
 		Signal.handle(new Signal("TERM"), gracefulExitHandler);
 
+		System.setProperty("org.quartz.threadPool.threadCount", "1");
 		new MainController().start();
 	}
 
