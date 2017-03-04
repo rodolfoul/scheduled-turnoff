@@ -5,8 +5,6 @@ import org.apache.logging.log4j.Logger;
 import org.freedesktop.dbus.DBusConnection;
 import org.freedesktop.dbus.exceptions.DBusException;
 import org.freedesktop.login1.Manager;
-import org.quartz.CronExpression;
-import org.quartz.CronScheduleBuilder;
 import org.quartz.Job;
 import org.quartz.JobBuilder;
 import org.quartz.JobDetail;
@@ -20,6 +18,7 @@ import org.quartz.impl.StdSchedulerFactory;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Date;
 
@@ -41,13 +40,11 @@ public class QuartzController {
 	}
 
 
-	public static void reschedulePowerOffJob(CronExpression cronExpression) throws SchedulerException {
-		LOGGER.info("Next shutdown to occur at {}",
-		            cronExpression.getNextValidTimeAfter(new Date()).toInstant().atZone(
-				            ZoneId.systemDefault()));
+	public static void reschedulePowerOffJob(Instant powerOffInstant) throws SchedulerException {
+		LOGGER.info("Next shutdown to occur at {}", powerOffInstant.atZone(ZoneId.systemDefault()));
 
 		Trigger trigger = TriggerBuilder.newTrigger()
-		                                .withSchedule(CronScheduleBuilder.cronSchedule(cronExpression))
+		                                .startAt(Date.from(powerOffInstant))
 		                                .forJob(job)
 		                                .build();
 		if (currentTrigger != null) {

@@ -24,10 +24,10 @@ import java.nio.file.WatchService;
 import java.text.ParseException;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Properties;
 
 public class MainController {
@@ -59,24 +59,28 @@ public class MainController {
 	}
 
 	private final Properties properties = new Properties();
-	private CronExpression currentShutdownCron;
-	private CronExpression currentStartupCron;
+	private Instant currentShutdownInstant;
+	private Instant currentStartupInstant;
 
 	public void start() {
 		checkRootPermission();
 
-		configureProperties();
-		configureScheduling();
-
+		if (configureProperties()) {
+			configureScheduling();
+		}
 	}
 
-	private void configureProperties() {
+	private boolean configureProperties() {
 		String propertiesFileName = "cron-times.properties";
 		final Path propertiesPath = Paths.get(MainController.class.getResource("/").getFile())
 		                                 .resolve(propertiesFileName);
 
+		boolean propertiesConfigured = false;
 		if (Files.exists(propertiesPath)) {
 			loadProperties(propertiesPath);
+			propertiesConfigured = true;
+		} else {
+			LOGGER.warn("Properties file not found");
 		}
 
 		new Thread(() -> {
@@ -105,6 +109,8 @@ public class MainController {
 						             "Properties reloading will not function", e);
 			}
 		}).start();
+
+		return propertiesConfigured;
 	}
 
 	private void loadProperties(Path propertiesPath) {
@@ -117,22 +123,20 @@ public class MainController {
 	}
 
 	private void configureScheduling() {
-		schedulePowerOn();
 		schedulePowerOff();
+		schedulePowerOn();
 	}
 
 
 	private void schedulePowerOff() {
 		try {
-			CronExpression cronExpression = parseMultiCronExpression(
-					properties.getProperty("shutdown.cron", "0 30 1 ? * *"));
-			if (currentShutdownCron != null && currentShutdownCron.getExpressionSummary()
-			                                                      .equals(cronExpression.getExpressionSummary())) {
+			Instant powerOffInstant = getMostRecentInstant(properties.getProperty("shutdown.cron"), Instant.now());
+			if (currentShutdownInstant != null && currentShutdownInstant.equals(powerOffInstant)) {
 				return;
 			}
 
-			QuartzController.reschedulePowerOffJob(cronExpression);
-			currentShutdownCron = cronExpression;
+			QuartzController.reschedulePowerOffJob(powerOffInstant);
+			currentShutdownInstant = powerOffInstant;
 
 		} catch (ParseException e) {
 			LOGGER.warn("Could not parse the given cron expression for shutdown.", e);
@@ -143,18 +147,21 @@ public class MainController {
 
 	private void schedulePowerOn() {
 		try {
-			CronExpression startupExpression = parseMultiCronExpression(
-					properties.getProperty("startup.cron", "0 0 6 ? * *"));
+			Instant referenceInstant = currentShutdownInstant;
+			if (referenceInstant == null) {
+				LOGGER.warn("Shutdown time not set!");
+				referenceInstant = Instant.now();
+			}
 
-			if (currentStartupCron != null && currentStartupCron.getExpressionSummary()
-			                                                    .equals(startupExpression.getExpressionSummary())) {
+			Instant startupInstant = getMostRecentInstant(properties.getProperty("startup.cron"), referenceInstant);
+
+			if (currentStartupInstant != null && currentStartupInstant.equals(startupInstant)) {
 				return;
 			}
-			Instant turnOnInstant = startupExpression.getNextValidTimeAfter(new Date()).toInstant();
 
-			long turnOnEpoch = turnOnInstant.getEpochSecond();
-			LOGGER.info("Setting next startup to {} -> {} -> {}", turnOnInstant, turnOnEpoch,
-			            turnOnInstant.atZone(ZoneId.systemDefault()));
+			long turnOnEpoch = startupInstant.getEpochSecond();
+			LOGGER.info("Setting next startup to {} -> {} ", startupInstant.atZone(ZoneId.systemDefault()),
+			            turnOnEpoch);
 
 			try (Writer wakeAlarmStream = Files.newBufferedWriter(Paths.get("/sys/class/rtc/rtc0/wakealarm"))) {
 				wakeAlarmStream.write("0\n");
@@ -162,7 +169,7 @@ public class MainController {
 			try (Writer wakeAlarmStream = Files.newBufferedWriter(Paths.get("/sys/class/rtc/rtc0/wakealarm"))) {
 				wakeAlarmStream.write(turnOnEpoch + "\n");
 			}
-			currentStartupCron = startupExpression;
+			currentStartupInstant = startupInstant;
 
 		} catch (ParseException e) {
 			LOGGER.warn("Could not parse cron expression for startup.cron", e);
@@ -174,15 +181,16 @@ public class MainController {
 
 	private void checkRootPermission() {
 		String userName = System.getProperty("user.name");
-		LOGGER.debug("Current user: {}", userName);
+		LOGGER.debug("Current user: {}, pid: {}", userName, CLibrary.INSTANCE.getpid());
 
 		if (!"root".equals(userName)) {
 			try {
-				String cmdLine = getFullCommandLine();
+				List<String> cmdLine = new ArrayList<>(getCurrentCommandLine());
+				cmdLine.add(0, "pkexec");
 
-				ProcessBuilder gksuBuilder = new ProcessBuilder("gksu", cmdLine);
-				gksuBuilder.inheritIO();
-				Process gksuProcess = gksuBuilder.start();
+				ProcessBuilder pkExecBuilder = new ProcessBuilder(cmdLine);
+				pkExecBuilder.inheritIO();
+				Process gksuProcess = pkExecBuilder.start();
 				int status = 0;
 
 				try {
@@ -203,56 +211,31 @@ public class MainController {
 		}
 	}
 
-	private String getFullCommandLine() throws IOException {
-		List<String> currentCmd = Arrays.asList(new String(
+	private List<String> getCurrentCommandLine() throws IOException {
+		return Arrays.asList(new String(
 				Files.readAllBytes(Paths.get("/proc", Integer.toString(CLibrary.INSTANCE.getpid()), "cmdline")),
 				StandardCharsets.UTF_8).split("\0"));
-
-		StringBuilder cmdLine = new StringBuilder();
-		boolean cpArgument = false;
-		for (ListIterator<String> it = currentCmd.listIterator(); it.hasNext(); ) {
-			String argument = it.next();
-			if ("-cp".equals(argument) || "-classpath".equals(argument)) {
-				cmdLine.append(" ").append(argument).append(" ").append(it.next());
-				cpArgument = true;
-
-			} else if (it.previousIndex() == 0) {
-				cmdLine.append(argument);
-
-			} else if ("-jar".equals(argument)) {
-				cmdLine.append(" ").append(argument).append(" ").append(it.next());
-			}
-		}
-		if (cpArgument) {
-			cmdLine.append(System.getProperty("sun.java.command"));
-		}
-		return cmdLine.toString();
 	}
 
-	private static CronExpression parseMultiCronExpression(String multiExpressionCron) throws ParseException {
-		String[] splitExpression = multiExpressionCron.split("\\|");
-		if (splitExpression.length == 1) {
-			return new CronExpression(splitExpression[0]);
+	private static Instant getMostRecentInstant(String multiExpressionCron,
+	                                            Instant referenceInstant) throws ParseException {
+		String[] expressions = multiExpressionCron.split("\\|");
+		Date referenceDate = Date.from(referenceInstant);
+
+		Instant mostRecentInstant = new CronExpression(expressions[0]).getNextValidTimeAfter(referenceDate).toInstant();
+
+		if (expressions.length == 1) {
+			return mostRecentInstant;
 		}
-		Date currentTime = new Date();
-		CronExpression mostRecentCron = null;
-		Instant mostRecentInstant = null;
 
-		for (String s : splitExpression) {
-			CronExpression cronExpression = new CronExpression(s);
-			if (mostRecentCron == null) {
-				mostRecentCron = cronExpression;
-				mostRecentInstant = mostRecentCron.getNextValidTimeAfter(currentTime).toInstant();
-				continue;
+		for (int i = 1; i < expressions.length; i++) {
+			CronExpression cronExpression = new CronExpression(expressions[i]);
+			Instant currentInstant = cronExpression.getNextValidTimeAfter(referenceDate).toInstant();
+
+			if (mostRecentInstant.isAfter(currentInstant)) {
+				mostRecentInstant = currentInstant;
 			}
-
-			Instant instant = cronExpression.getNextValidTimeAfter(currentTime).toInstant();
-			if (mostRecentInstant.isAfter(instant)) {
-				mostRecentCron = cronExpression;
-				mostRecentInstant = instant;
-			}
-
 		}
-		return mostRecentCron;
+		return mostRecentInstant;
 	}
 }
