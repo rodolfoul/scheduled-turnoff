@@ -78,7 +78,7 @@ public class QuartzController {
 				powerOffNow();
 
 			} catch (DBusException e) {
-				LOGGER.error("Exception while during power off", e);
+				LOGGER.error("Exception during power off", e);
 				throw new JobExecutionException(e);
 			}
 		}
